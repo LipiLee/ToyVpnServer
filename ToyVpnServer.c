@@ -221,6 +221,51 @@ void get_string(int address, char *to_string) {
     sprintf(to_string, "%d.%d.%d", address >> 16, (address & 0xFF00) >> 8, address & 0xFF);
 }
 
+void set_addr(char *dev, char *addr) {
+  int sock = socket(AF_INET, SOCK_DGRAM, 0);
+  if (sock == -1) handle_error("socket");
+
+  struct ifreq ifr;
+  bzero(&ifr, sizeof(struct ifreq));
+  strncpy(ifr.ifr_name, dev, IFNAMSIZ);
+  ifr.ifr_addr.sa_family = AF_INET;
+  struct sockaddr_in *sa_in = (struct sockaddr_in *) &ifr.ifr_dstaddr;
+  inet_pton(AF_INET, addr, &sa_in->sin_addr);
+  if (ioctl(sock, SIOCSIFADDR, &ifr) == -1)
+    handle_error("Cannot set address");
+  close(sock);
+}
+
+void set_flag_up(char *dev) {
+  int sock = socket(AF_INET, SOCK_DGRAM, 0);
+  if (sock == -1) handle_error("socket");
+
+  struct ifreq ifr;
+  bzero(&ifr, sizeof(struct ifreq));
+  strncpy(ifr.ifr_name, dev, IFNAMSIZ);
+  if (ioctl(sock, SIOCGIFFLAGS, &ifr) == -1)
+    handle_error("Cannot get flags");
+
+  ifr.ifr_flags |= IFF_UP;
+  if (ioctl(sock, SIOCSIFFLAGS, &ifr) == -1)
+    handle_error("Cannot set flags");
+}
+
+void set_dstaddr(char *dev, char *addr) {
+  int sock = socket(AF_INET, SOCK_DGRAM, 0);
+  if (sock == -1) handle_error("socket");
+
+  struct ifreq ifr;
+  bzero(&ifr, sizeof(struct ifreq));
+  strncpy(ifr.ifr_name, dev, IFNAMSIZ);
+  ifr.ifr_addr.sa_family = AF_INET;
+  struct sockaddr_in *sa_in = (struct sockaddr_in *) &ifr.ifr_dstaddr;
+  inet_pton(AF_INET, addr, &sa_in->sin_addr);
+  if (ioctl(sock, SIOCSIFDSTADDR, &ifr) == -1)
+    handle_error("Cannot set destination address");
+  close(sock);
+}
+
 int main(int argc, char *argv[])
 {
     if (argc != 4) {
@@ -239,10 +284,17 @@ int main(int argc, char *argv[])
         // Get TUN interface.
         int interface = get_interface(argv[1]);
 
-        //int address = choose_address(priv_addr);
-        //char addr_str[15] = {'1', '0', '.', 0};
-        //get_string(address, addr_str + 3);
-        char addr_str[] = "10.0.0.2";
+        const int addr = choose_address(priv_addr);
+        char addr_str[15] = {'1', '0', '.', 0};
+        get_string(addr, addr_str + 3);
+
+        set_addr(argv[1], addr_str);
+
+        set_flag_up(argv[1]);
+        const int dst_addr = choose_address(priv_addr);
+        get_string(dst_addr, addr_str + 3);
+
+        set_dstaddr(argv[1], addr_str);
 
         // Parse the arguments and set the parameters.
         char parameters[1024];
