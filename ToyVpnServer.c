@@ -75,8 +75,8 @@ static int get_interface(char *name)
 
     struct ifreq ifr;
     bzero(&ifr, sizeof(struct ifreq));
-    ifr.ifr_flags = IFF_TUN | IFF_NO_PI | IFF_MULTI_QUEUE;
-    //ifr.ifr_flags = IFF_TUN | IFF_NO_PI;
+    //ifr.ifr_flags = IFF_TUN | IFF_NO_PI | IFF_MULTI_QUEUE;
+    ifr.ifr_flags = IFF_TUN | IFF_NO_PI;
     strncpy(ifr.ifr_name, name, sizeof(ifr.ifr_name));
 
     if (ioctl(interface, TUNSETIFF, &ifr) == -1)
@@ -133,8 +133,8 @@ static void build_parameters(char *parameters, int size, char *address) {
     const char *route = "r,0.0.0.0,0";
     int offset;
 
-    strcat(parameters, " ");
-    strcpy(parameters, mtu);
+    strcpy(parameters, " ");
+    strcat(parameters, mtu);
     strcat(parameters, " ");
     strcat(parameters, dns);
     strcat(parameters, " ");
@@ -167,12 +167,12 @@ void *read_send(void *ptr) {
     int length;
 
     while ((length = read(interface, packet, sizeof(packet))) > 0) {
-        //printf("read %d bytes from interface.\n", length);
+        printf("read %d bytes from interface.\n", length);
         if ((length = send(socket, packet, length, MSG_NOSIGNAL)) == -1) {
             perror("send");
             if (errno == EBADF) return NULL;
         }
-        //printf("send %d bytes to client.\n", length);
+        printf("send %d bytes to client.\n", length);
     }
     
     if (length == 0) printf("CANNOT read tun interface.\n");
@@ -189,11 +189,11 @@ void *recv_write(void *ptr) {
     int length;
 
     while ((length = recv(socket, packet, sizeof(packet), 0)) > 0) {
-        //printf("received %d bytes from socket\n", length);
+        printf("received %d bytes from socket\n", length);
         if (packet[0] != 0) {
             if ((length = write(interface, packet, length)) == -1)
                 perror("write");
-            //printf("write %d bytes to interface\n", length);
+            printf("write %d bytes to interface\n", length);
         }
     }
 
@@ -239,9 +239,11 @@ int main(int argc, char *argv[])
         // Get TUN interface.
         int interface = get_interface(argv[1]);
 
-        int address = choose_address(priv_addr);
-        char addr_str[15] = {'1', '0', '.', 0};
-        get_string(address, addr_str + 3);
+        //int address = choose_address(priv_addr);
+        //char addr_str[15] = {'1', '0', '.', 0};
+        //get_string(address, addr_str + 3);
+        char addr_str[] = "10.0.0.2";
+
         // Parse the arguments and set the parameters.
         char parameters[1024];
         build_parameters(parameters, 1024, addr_str);
