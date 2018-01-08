@@ -81,6 +81,7 @@ static int get_interface(char *name)
 
     if (ioctl(interface, TUNSETIFF, &ifr) == -1)
         handle_error("Cannot get TUN interface");
+    strcpy(name, ifr.ifr_name);
 
     return interface;
 }
@@ -128,7 +129,6 @@ static int get_tunnel(char *port, char *secret)
 
 static void build_parameters(char *parameters, int size, char *address) {
     const char *mtu = "m,1400";
-    //const char *address = "a,10.0.0.2,32";
     const char *dns = "d,8.8.8.8";
     const char *route = "r,0.0.0.0,0";
     int offset;
@@ -136,16 +136,17 @@ static void build_parameters(char *parameters, int size, char *address) {
     strcpy(parameters, " ");
     strcat(parameters, mtu);
     strcat(parameters, " ");
-    strcat(parameters, dns);
-    strcat(parameters, " ");
-    strcat(parameters, route);
-    strcat(parameters, " ");
 
     strcat(parameters, "a,");
     strcat(parameters, address);
     strcat(parameters, ",32");
 
-    offset = 1 + strlen(mtu) + 1 + strlen(dns) + 1 + strlen(route) + 1 + strlen(address) + 5;
+    strcat(parameters, " ");
+    strcat(parameters, dns);
+    strcat(parameters, " ");
+    strcat(parameters, route);
+
+    offset = 1 + strlen(mtu) + 1 + 2 + strlen(address) + 3 + 1 + strlen(dns) + 1 + strlen(route);
 
     // Fill the rest of the space with spaces.
     memset(&parameters[offset], ' ', size - offset);
@@ -170,7 +171,10 @@ void *read_send(void *ptr) {
         printf("read %d bytes from interface.\n", length);
         if ((length = send(socket, packet, length, MSG_NOSIGNAL)) == -1) {
             perror("send");
-            if (errno == EBADF) return NULL;
+            if (errno == EBADF) {
+                close(interface);
+                return NULL;
+            }
         }
         printf("send %d bytes to client.\n", length);
     }
@@ -178,6 +182,7 @@ void *read_send(void *ptr) {
     if (length == 0) printf("CANNOT read tun interface.\n");
     else if (length == -1) perror("read");
 
+    close(interface);
     return NULL;
 }
 
@@ -189,36 +194,48 @@ void *recv_write(void *ptr) {
     int length;
 
     while ((length = recv(socket, packet, sizeof(packet), 0)) > 0) {
-        printf("received %d bytes from socket\n", length);
+        //printf("received %d bytes from socket\n", length);
         if (packet[0] != 0) {
             if ((length = write(interface, packet, length)) == -1)
                 perror("write");
-            printf("write %d bytes to interface\n", length);
+            //printf("write %d bytes to interface\n", length);
         }
     }
 
-    if (length == 0) printf("client want to terminate this connection.\n");
-    else if (length == -1) perror("recv");
+    if (length == 0) printf("blocked recv() reutn 0.\n");
+    else if (length == -1) {
+        perror("recv");
+        if (errno == ECONNREFUSED) { // The client has alreay disconnected.
+            close(socket);
+            return NULL;
+        }
+    }
 
-    close(socket);
     return NULL;
 }
 
-#define MAX_ADDRESS 0xFFFF	// 24 bit A class
+#define MAX_ADDR 0xFFFF	// 24 bit A class
 // allocate a address in range 10.0.0.2 ~ 10.0.255.254
-int choose_address(char *addresses) {
+int choose_random(char *addresses) {
     unsigned int random;
     do {
         srand(time(NULL));
-        random = rand() / MAX_ADDRESS;
+        random = rand() / MAX_ADDR;
     } while (random == 0 || random == 1 || addresses[random] == 1);
+
     addresses[random] = 1;
 
     return random;
 }
 
-void get_string(int address, char *to_string) {
-    sprintf(to_string, "%d.%d.%d", address >> 16, (address & 0xFF00) >> 8, address & 0xFF);
+int choose_addr(char *addrs) {
+    for (int i = 2; i < MAX_ADDR; i++) {
+        if (addrs[i] == 0)  {
+            addrs[i] = 1;
+            return i;
+        }
+    }
+    return MAX_ADDR;
 }
 
 void set_addr(char *dev, char *addr) {
@@ -249,6 +266,7 @@ void set_flag_up(char *dev) {
   ifr.ifr_flags |= IFF_UP;
   if (ioctl(sock, SIOCSIFFLAGS, &ifr) == -1)
     handle_error("Cannot set flags");
+  close(sock);
 }
 
 void set_dstaddr(char *dev, char *addr) {
@@ -266,39 +284,59 @@ void set_dstaddr(char *dev, char *addr) {
   close(sock);
 }
 
+
+
+int setup_interface(char *dev, char *addrs, char *addr_str) {
+    const int addr = choose_addr(addrs);
+    if (addr == MAX_ADDR) {
+        printf("Address is completely full.\n");
+        return -1;
+    }
+    sprintf(addr_str + 5, "%d.%d", addr >> 8, addr & 0xFF);
+    set_addr(dev, addr_str);
+
+    set_flag_up(dev);
+
+    const int dst_addr = choose_addr(addrs);
+    if (dst_addr == MAX_ADDR) {
+        printf("Address is completely full.\n");
+        return -1;
+    }
+    sprintf(addr_str + 5, "%d.%d", dst_addr >> 8, dst_addr & 0xFF);
+    set_dstaddr(dev, addr_str);
+    return 0;
+}
+
 int main(int argc, char *argv[])
 {
+/*
     if (argc != 4) {
         printf("Usage: %s <tunN> <port> <secret>\n", argv[1]);
         exit(EXIT_FAILURE);
     }
+*/
     //const FILE *fp = start_logger("log");
-    char priv_addr[MAX_ADDRESS];
-    bzero(priv_addr, sizeof(char)*MAX_ADDRESS);
+    char priv_addr[MAX_ADDR];
+    bzero(priv_addr, sizeof(char)*MAX_ADDR);
 
     // Wait for a tunnel.
     int tunnel;
-    while ((tunnel = get_tunnel(argv[2], argv[3])) != -1) {
-        printf("%s: Here comes a new tunnel\n", argv[1]);
+    while ((tunnel = get_tunnel("8000", "test")) != -1) {
+        printf("%s: Here comes a new tunnel\n", argv[0]);
 
-        // Get TUN interface.
-        int interface = get_interface(argv[1]);
+        // tun name is assgined systematically
+        char name[IFNAMSIZ] = { 0 };
+        int interface = get_interface(name);
 
-        const int addr = choose_address(priv_addr);
-        char addr_str[15] = {'1', '0', '.', 0};
-        get_string(addr, addr_str + 3);
-
-        set_addr(argv[1], addr_str);
-
-        set_flag_up(argv[1]);
-        const int dst_addr = choose_address(priv_addr);
-        get_string(dst_addr, addr_str + 3);
-
-        set_dstaddr(argv[1], addr_str);
-
+        char client_addr[15] = {'1', '0', '.', '0', '.', 0};
+        int success = setup_interface(name, priv_addr, client_addr);
+        if (success == -1) {
+            // TODO send a notification which server CANNOT assign a address to client
+            continue;
+        }
         // Parse the arguments and set the parameters.
         char parameters[1024];
-        build_parameters(parameters, 1024, addr_str);
+        build_parameters(parameters, 1024, client_addr);
 
         // Send the parameters several times in case of packet loss.
         for (int i = 0; i < 3; ++i)
@@ -319,5 +357,5 @@ int main(int argc, char *argv[])
     }
     perror("Cannot create tunnels");
     //if (fp != NULL) stop_logger(fp);
-    exit(EXIT_SUCCESS);
+    return 0;
 }
