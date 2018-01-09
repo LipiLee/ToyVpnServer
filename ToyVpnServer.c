@@ -185,9 +185,7 @@ void *read_send(void *ptr) {
         //printf("read %d bytes from interface.\n", length);
         if ((length = send(socket, packet, length, MSG_NOSIGNAL)) == -1) {
             perror("send");
-            close(interface);
-            release_addr(addrs, tun_addr);
-            return NULL;
+            goto exit;
         }
         //printf("send %d bytes to client.\n", length);
     }
@@ -195,6 +193,7 @@ void *read_send(void *ptr) {
     if (length == 0) printf("CANNOT read tun interface.\n");
     else if (length == -1) perror("read");
 
+exit:
     close(interface);
     release_addr(addrs, tun_addr);
 
@@ -214,21 +213,20 @@ void *recv_write(void *ptr) {
     while ((length = recv(socket, packet, sizeof(packet), 0)) > 0) {
         //printf("received %d bytes from socket\n", length);
         if (packet[0] != 0) {
-            if ((length = write(interface, packet, length)) == -1)
+            if ((length = write(interface, packet, length)) == -1) {
                 perror("write");
+                goto exit;
+            }
             //printf("write %d bytes to interface\n", length);
         }
     }
 
     if (length == 0) printf("blocked recv() reutn 0.\n");
-    else if (length == -1) {
-        perror("recv");
-        if (errno == ECONNREFUSED) { // The client has alreay disconnected.
-            close(socket);
-            release_addr(addrs, clnt_addr);
-            return NULL;
-        }
-    }
+    else if (length == -1) perror("recv");
+
+exit:
+    close(socket);
+    release_addr(addrs, clnt_addr);
 
     return NULL;
 }
