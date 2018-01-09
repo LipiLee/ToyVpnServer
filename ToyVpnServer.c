@@ -207,6 +207,7 @@ int choose_random(char *addresses) {
 
 int choose_addr(char *addrs) {
     pthread_mutex_lock(&mutex);
+
     for (int i = 1; i < MAX_ADDR; i++) {
         if (addrs[i] == 0)  {
             addrs[i] = 1;
@@ -214,7 +215,9 @@ int choose_addr(char *addrs) {
             return i;
         }
     }
+
     pthread_mutex_unlock(&mutex);
+
     return MAX_ADDR;
 }
 
@@ -224,12 +227,15 @@ void set_addr(char *dev, char *addr) {
 
   struct ifreq ifr;
   bzero(&ifr, sizeof(struct ifreq));
+
   strncpy(ifr.ifr_name, dev, IFNAMSIZ);
   ifr.ifr_addr.sa_family = AF_INET;
   struct sockaddr_in *sa_in = (struct sockaddr_in *) &ifr.ifr_dstaddr;
   inet_pton(AF_INET, addr, &sa_in->sin_addr);
+
   if (ioctl(sock, SIOCSIFADDR, &ifr) == -1)
     handle_error("Cannot set address");
+
   close(sock);
 }
 
@@ -239,6 +245,7 @@ void set_flag_up(char *dev) {
 
   struct ifreq ifr;
   bzero(&ifr, sizeof(struct ifreq));
+
   strncpy(ifr.ifr_name, dev, IFNAMSIZ);
   if (ioctl(sock, SIOCGIFFLAGS, &ifr) == -1)
     handle_error("Cannot get flags");
@@ -246,6 +253,7 @@ void set_flag_up(char *dev) {
   ifr.ifr_flags |= IFF_UP;
   if (ioctl(sock, SIOCSIFFLAGS, &ifr) == -1)
     handle_error("Cannot set flags");
+
   close(sock);
 }
 
@@ -255,12 +263,15 @@ void set_dstaddr(char *dev, char *addr) {
 
   struct ifreq ifr;
   bzero(&ifr, sizeof(struct ifreq));
+
   strncpy(ifr.ifr_name, dev, IFNAMSIZ);
   ifr.ifr_addr.sa_family = AF_INET;
   struct sockaddr_in *sa_in = (struct sockaddr_in *) &ifr.ifr_dstaddr;
   inet_pton(AF_INET, addr, &sa_in->sin_addr);
+
   if (ioctl(sock, SIOCSIFDSTADDR, &ifr) == -1)
     handle_error("Cannot set destination address");
+
   close(sock);
 }
 
@@ -289,12 +300,6 @@ int setup_interface(char *dev, char *addrs, char *addr_str, int *intf_addr, int 
 
 int main(int argc, char *argv[])
 {
-/*
-    if (argc != 4) {
-        printf("Usage: %s <tunN> <port> <secret>\n", argv[1]);
-        exit(EXIT_FAILURE);
-    }
-*/
     //const FILE *fp = start_logger("log");
     char priv_addr[MAX_ADDR];
     bzero(priv_addr, sizeof(char)*MAX_ADDR);
@@ -302,7 +307,7 @@ int main(int argc, char *argv[])
     // Wait for a tunnel.
     int tunnel;
     while ((tunnel = get_tunnel("8000", "test")) != -1) {
-        printf("%s: Here comes a new tunnel\n", argv[0]);
+        printf("Here comes a new tunnel\n");
 
         // tun name is assgined systematically
         char name[IFNAMSIZ] = { 0 };
