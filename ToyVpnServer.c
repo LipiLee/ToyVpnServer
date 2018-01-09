@@ -182,16 +182,14 @@ void *read_send(void *ptr) {
     int length;
 
     while ((length = read(interface, packet, sizeof(packet))) > 0) {
-        printf("read %d bytes from interface.\n", length);
+        //printf("read %d bytes from interface.\n", length);
         if ((length = send(socket, packet, length, MSG_NOSIGNAL)) == -1) {
             perror("send");
-            if (errno == EBADF) {
-                close(interface);
-                release_addr(addrs, tun_addr);
-                return NULL;
-            }
+            close(interface);
+            release_addr(addrs, tun_addr);
+            return NULL;
         }
-        printf("send %d bytes to client.\n", length);
+        //printf("send %d bytes to client.\n", length);
     }
     
     if (length == 0) printf("CANNOT read tun interface.\n");
