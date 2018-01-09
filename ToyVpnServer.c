@@ -66,6 +66,8 @@
 #define handle_error(msg) \
         do { perror(msg); exit(EXIT_FAILURE); } while(0)
 
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
 static int get_interface(char *name)
 {
     const int interface = open("/dev/net/tun", O_RDWR);
@@ -158,12 +160,24 @@ static void build_parameters(char *parameters, int size, char *address) {
 struct int_sock {
     int interface;
     int socket;
+    char *addrs;
+    int clnt_addr;
+    int tun_addr;
 };
+
+void release_addr(char *addrs, int addr) {
+   pthread_mutex_lock(&mutex);
+   addrs[addr] = 0;
+   pthread_mutex_unlock(&mutex);
+}
 
 void *read_send(void *ptr) {
     struct int_sock *pint_sock = (struct int_sock *) ptr;
     int socket = pint_sock->socket;
     int interface = pint_sock->interface;
+    char *addrs = pint_sock->addrs;
+    int tun_addr = pint_sock->tun_addr;
+
     char packet[32767];
     int length;
 
@@ -173,6 +187,7 @@ void *read_send(void *ptr) {
             perror("send");
             if (errno == EBADF) {
                 close(interface);
+                release_addr(addrs, tun_addr);
                 return NULL;
             }
         }
@@ -183,6 +198,8 @@ void *read_send(void *ptr) {
     else if (length == -1) perror("read");
 
     close(interface);
+    release_addr(addrs, tun_addr);
+
     return NULL;
 }
 
@@ -190,6 +207,9 @@ void *recv_write(void *ptr) {
     struct int_sock *pint_sock = (struct int_sock *) ptr;
     int socket = pint_sock->socket;
     int interface = pint_sock->interface;
+    char *addrs = pint_sock->addrs;
+    int clnt_addr = pint_sock->clnt_addr;
+
     char packet[32767];
     int length;
 
@@ -207,6 +227,7 @@ void *recv_write(void *ptr) {
         perror("recv");
         if (errno == ECONNREFUSED) { // The client has alreay disconnected.
             close(socket);
+            release_addr(addrs, clnt_addr);
             return NULL;
         }
     }
@@ -229,12 +250,15 @@ int choose_random(char *addresses) {
 }
 
 int choose_addr(char *addrs) {
-    for (int i = 2; i < MAX_ADDR; i++) {
+    pthread_mutex_lock(&mutex);
+    for (int i = 1; i < MAX_ADDR; i++) {
         if (addrs[i] == 0)  {
             addrs[i] = 1;
+            pthread_mutex_unlock(&mutex);
             return i;
         }
     }
+    pthread_mutex_unlock(&mutex);
     return MAX_ADDR;
 }
 
@@ -284,9 +308,7 @@ void set_dstaddr(char *dev, char *addr) {
   close(sock);
 }
 
-
-
-int setup_interface(char *dev, char *addrs, char *addr_str) {
+int setup_interface(char *dev, char *addrs, char *addr_str, int *intf_addr, int *clnt_addr) {
     const int addr = choose_addr(addrs);
     if (addr == MAX_ADDR) {
         printf("Address is completely full.\n");
@@ -304,6 +326,8 @@ int setup_interface(char *dev, char *addrs, char *addr_str) {
     }
     sprintf(addr_str + 5, "%d.%d", dst_addr >> 8, dst_addr & 0xFF);
     set_dstaddr(dev, addr_str);
+    *intf_addr = addr;
+    *clnt_addr = dst_addr;
     return 0;
 }
 
@@ -329,9 +353,10 @@ int main(int argc, char *argv[])
         int interface = get_interface(name);
 
         char client_addr[15] = {'1', '0', '.', '0', '.', 0};
-        int success = setup_interface(name, priv_addr, client_addr);
+        int tun_addr, clnt_addr;
+        int success = setup_interface(name, priv_addr, client_addr, &tun_addr, &clnt_addr);
         if (success == -1) {
-            // TODO send a notification which server CANNOT assign a address to client
+            // TODO send the notification which server CANNOT assign a address to client
             continue;
         }
         // Parse the arguments and set the parameters.
@@ -348,6 +373,10 @@ int main(int argc, char *argv[])
         struct int_sock connection;
         connection.socket = tunnel;
         connection.interface = interface;
+        connection.addrs = priv_addr;
+        connection.tun_addr = tun_addr;
+        connection.clnt_addr = clnt_addr;
+
         if ((res = pthread_create(t_id, NULL, read_send, (void *) &connection)) != 0)
             handle_error_en(res, "pthread_create");
         
