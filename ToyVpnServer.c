@@ -43,7 +43,7 @@ static int get_interface(char *name)
 
     struct ifreq ifr;
     bzero(&ifr, sizeof(struct ifreq));
-    //ifr.ifr_flags = IFF_TUN | IFF_NO_PI | IFF_MULTI_QUEUE;
+
     ifr.ifr_flags = IFF_TUN | IFF_NO_PI;
     strncpy(ifr.ifr_name, name, sizeof(ifr.ifr_name));
 
@@ -125,13 +125,13 @@ struct int_sock {
     int tun_addr;
 };
 
-void release_addr(char *addrs, int addr) {
+static void release_addr(char *addrs, int addr) {
    pthread_mutex_lock(&mutex);
    addrs[addr] = 0;
    pthread_mutex_unlock(&mutex);
 }
 
-void *read_send(void *ptr) {
+static void *read_send(void *ptr) {
     struct int_sock *pint_sock = (struct int_sock *) ptr;
     int socket = pint_sock->socket;
     int interface = pint_sock->interface;
@@ -160,7 +160,7 @@ exit:
     return NULL;
 }
 
-void *recv_write(void *ptr) {
+static void *recv_write(void *ptr) {
     struct int_sock *pint_sock = (struct int_sock *) ptr;
     int socket = pint_sock->socket;
     int interface = pint_sock->interface;
@@ -193,7 +193,7 @@ exit:
 
 #define MAX_ADDR 0xFFFF	// 24 bit A class
 // allocate a address in range 10.0.0.2 ~ 10.0.255.254
-int choose_random(char *addresses) {
+static int choose_random(char *addresses) {
     unsigned int random;
     do {
         srand(time(NULL));
@@ -205,7 +205,7 @@ int choose_random(char *addresses) {
     return random;
 }
 
-int choose_addr(char *addrs) {
+static int choose_addr(char *addrs) {
     pthread_mutex_lock(&mutex);
 
     for (int i = 1; i < MAX_ADDR; i++) {
@@ -221,7 +221,7 @@ int choose_addr(char *addrs) {
     return MAX_ADDR;
 }
 
-void set_addr(char *dev, char *addr) {
+static void set_addr(char *dev, char *addr) {
   int sock = socket(AF_INET, SOCK_DGRAM, 0);
   if (sock == -1) handle_error("socket");
 
@@ -239,7 +239,7 @@ void set_addr(char *dev, char *addr) {
   close(sock);
 }
 
-void set_flag_up(char *dev) {
+static void set_flag_up(char *dev) {
   int sock = socket(AF_INET, SOCK_DGRAM, 0);
   if (sock == -1) handle_error("socket");
 
@@ -257,7 +257,7 @@ void set_flag_up(char *dev) {
   close(sock);
 }
 
-void set_dstaddr(char *dev, char *addr) {
+static void set_dstaddr(char *dev, char *addr) {
   int sock = socket(AF_INET, SOCK_DGRAM, 0);
   if (sock == -1) handle_error("socket");
 
@@ -275,7 +275,7 @@ void set_dstaddr(char *dev, char *addr) {
   close(sock);
 }
 
-int setup_interface(char *dev, char *addrs, char *addr_str, int *intf_addr, int *clnt_addr) {
+static int setup_interface(char *dev, char *addrs, char *addr_str, int *intf_addr, int *clnt_addr) {
     const int addr = choose_addr(addrs);
     if (addr == MAX_ADDR) {
         printf("Address is completely full.\n");
