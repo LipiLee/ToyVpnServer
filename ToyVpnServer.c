@@ -181,7 +181,7 @@ static void *recv_write(void *ptr) {
         }
     }
 
-    if (length == 0) printf("blocked recv() reutn 0.\n");
+    if (length == 0) printf("blocked recv() return 0.\n");
     else if (length == -1) perror("recv");
 
 exit:
@@ -192,7 +192,8 @@ exit:
 }
 
 #define MAX_ADDR 0xFFFF	// 24 bit A class
-// allocate a address in range 10.0.0.2 ~ 10.0.255.254
+// allocate a address in range 10.0.0.1 ~ 10.0.255.254
+/*
 static int choose_random(char *addresses) {
     unsigned int random;
     do {
@@ -204,7 +205,7 @@ static int choose_random(char *addresses) {
 
     return random;
 }
-
+*/
 static int choose_addr(char *addrs) {
     pthread_mutex_lock(&mutex);
 
