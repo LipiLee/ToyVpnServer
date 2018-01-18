@@ -15,6 +15,7 @@
  */
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -141,19 +142,36 @@ static void *read_send(void *ptr) {
     char packet[32767];
     int length;
 
-    while ((length = read(interface, packet, sizeof(packet))) > 0) {
+    do {
+        struct pollfd intf_pollfd;
+        intf_pollfd.fd = interface;
+        intf_pollfd.events = POLLIN;
+        int res = poll(&intf_pollfd, 1, 60 * 60 * 1000); // a hour time-out
+        if (res == 0) {
+            printf("tun interface read is timed out.\n");
+            break;
+        } else if (res == -1) {
+            perror("interface poll");
+            break;
+        }
+
+        length = read(interface, packet, sizeof(packet));
+        if (length == 0) {
+            printf("CANNOT read tun interface.\n");
+            break;
+        } else if (length == -1) {
+            perror("read");
+            break;
+        }
+
         //printf("read %d bytes from interface.\n", length);
         if ((length = send(socket, packet, length, MSG_NOSIGNAL)) == -1) {
             perror("send");
-            goto exit;
+            break;
         }
         //printf("send %d bytes to client.\n", length);
-    }
+    } while(1);
     
-    if (length == 0) printf("CANNOT read tun interface.\n");
-    else if (length == -1) perror("read");
-
-exit:
     close(interface);
     release_addr(addrs, tun_addr);
 
@@ -170,21 +188,39 @@ static void *recv_write(void *ptr) {
     char packet[32767];
     int length;
 
-    while ((length = recv(socket, packet, sizeof(packet), 0)) > 0) {
+    do {
+        struct pollfd sock_pollfd;
+        sock_pollfd.fd = socket;
+        sock_pollfd.events = POLLIN; 
+        int res = poll(&sock_pollfd, 1, 60 * 60 * 1000); // a hour time-out
+        if (res == 0) {
+            printf("Socket recv() is timed out.\n");
+            break;
+        } else if (res == -1) {
+            perror("socket poll");
+            break;
+        }
+
+        length = recv(socket, packet, sizeof(packet), 0);
+        if (length == 0) {
+            printf("Blocked recv() return 0.\n");
+            break;
+        }
+        else if (length == -1) {
+            perror("recv");
+            break;
+        }
+
         //printf("received %d bytes from socket\n", length);
         if (packet[0] != 0) {
             if ((length = write(interface, packet, length)) == -1) {
                 perror("write");
-                goto exit;
+                break;
             }
             //printf("write %d bytes to interface\n", length);
         }
-    }
+    } while(1);
 
-    if (length == 0) printf("blocked recv() return 0.\n");
-    else if (length == -1) perror("recv");
-
-exit:
     close(socket);
     release_addr(addrs, clnt_addr);
 
