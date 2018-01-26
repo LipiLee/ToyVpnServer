@@ -218,6 +218,10 @@ static void *recv_write(void *ptr) {
                 break;
             }
             //printf("write %d bytes to interface\n", length);
+        } else if (packet[1] == 0) {
+            printf("Client closed connection.\n");
+            close(interface);
+            break;
         }
     } while(1);
 
