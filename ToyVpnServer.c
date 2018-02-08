@@ -83,6 +83,11 @@ static int get_tunnel(char *port, char *secret)
             return -1;
         }
         packet[n] = 0;
+        if (n == 1 && packet[0] == 0) {
+            n = sendto(tunnel, packet, n, 0, (const struct sockaddr *)&addr, addrlen);
+            if (n == -1) handle_error("sendto");
+            continue;
+        }
     } while (packet[0] != 0 || strcmp(secret, &packet[1]));
 
     // Connect to the client as we only handle one client at a time.
