@@ -79,7 +79,7 @@ static int get_tunnel(char *port, char *secret)
         addrlen = sizeof(addr);
         int n = recvfrom(tunnel, packet, sizeof(packet), 0,
                 (struct sockaddr *)&addr, &addrlen);
-        if (n <= 0) {
+        if (n < 0) {
             return -1;
         }
         packet[n] = 0;
