@@ -95,11 +95,11 @@ static int get_tunnel(char *port, char *secret)
     return tunnel;
 }
 
-static void build_parameters(char *parameters, int size, char *address) {
+static int build_parameters(char *parameters, int size, char *address) {
     const char *mtu = "m,1400";
     const char *dns = "d,8.8.8.8";
     const char *route = "r,0.0.0.0,0";
-    int offset;
+    int write_size;
 
     strcpy(parameters, " ");
     strcat(parameters, mtu);
@@ -114,13 +114,12 @@ static void build_parameters(char *parameters, int size, char *address) {
     strcat(parameters, " ");
     strcat(parameters, route);
 
-    offset = 1 + strlen(mtu) + 1 + 2 + strlen(address) + 3 + 1 + strlen(dns) + 1 + strlen(route);
-
-    // Fill the rest of the space with spaces.
-    memset(&parameters[offset], ' ', size - offset);
+    write_size = 1 + strlen(mtu) + 1 + 2 + strlen(address) + 3 + 1 + strlen(dns) + 1 + strlen(route);
 
     // Control messages always start with zero.
     parameters[0] = 0;
+
+    return write_size;
 }
 
 struct int_sock {
@@ -368,11 +367,11 @@ int main(int argc, char *argv[])
         }
         // Parse the arguments and set the parameters.
         char parameters[1024];
-        build_parameters(parameters, 1024, client_addr);
+        int size = build_parameters(parameters, 1024, client_addr);
 
         // Send the parameters several times in case of packet loss.
         for (int i = 0; i < 3; ++i)
-            if (send(tunnel, parameters, sizeof(parameters), MSG_NOSIGNAL) == -1)
+            if (send(tunnel, parameters, size, MSG_NOSIGNAL) == -1)
                 handle_error("send");
 
         pthread_t t_id[2];
