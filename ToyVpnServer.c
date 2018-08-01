@@ -60,6 +60,7 @@ static int get_tunnel(char *port, char *secret)
     // We use an IPv6 socket to cover both IPv4 and IPv6.
     const int tunnel = socket(AF_INET6, SOCK_DGRAM, 0);
     const int on = 1, off = 0;
+    if (tunnel == -1) handle_error("socket");
     setsockopt(tunnel, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
     setsockopt(tunnel, IPPROTO_IPV6, IPV6_V6ONLY, &off, sizeof(off));
 
