@@ -1,0 +1,13 @@
+[Unit]
+Description=ToyVpnServer
+After=network.target env.service
+
+[Service]
+ExecStart=/home/ec2-user/src/ToyVpnServer/ToyVpnServer
+Restart=always
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=toyvpn
+
+[Install]
+WantedBy=multi-user.target
