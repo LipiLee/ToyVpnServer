@@ -3,7 +3,7 @@ Description=ToyVpnServer
 After=network.target env.service
 
 [Service]
-ExecStart=/home/ec2-user/src/ToyVpnServer/ToyVpnServer
+ExecStart=/home/centos/src/ToyVpnServer/ToyVpnServer
 Restart=always
 StandardOutput=syslog
 StandardError=syslog
